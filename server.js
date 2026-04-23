@@ -1,40 +1,53 @@
 const express = require("express");
 const cors = require("cors");
-const products = require("./products");
+const { CosmosClient } = require("@azure/cosmos");
 
 const app = express();
-
-// Enable CORS for React frontend
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
-app.get("/", (req, res) => {
-  res.send("Azure App Service Product API is running");
-});
+// Cosmos DB config
+const connectionString = process.env.COSMOS_DB_CONNECTION_STRING;
 
-/**
- * GET all products
- */
-app.get("/api/products", (req, res) => {
-  res.json(products);
-});
+const client = new CosmosClient(connectionString);
+const database = client.database("products-db");
+const container = database.container("products");
 
-/**
- * GET single product by ID
- */
-app.get("/api/products/:id", (req, res) => {
-  const product = products.find(p => p.id === req.params.id);
+// GET all products
+app.get("/api/products", async (req, res) => {
+  try {
+    const query = {
+      query: "SELECT * FROM c"
+    };
 
-  if (!product) {
-    return res.status(404).json({ message: "Product not found" });
+    const { resources } = await container.items.query(query).fetchAll();
+    res.json(resources);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error fetching products");
   }
+});
 
-  res.json(product);
+// GET product by ID
+app.get("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { resource } = await container.item(id, id).read();
+
+    if (!resource) {
+      return res.status(404).send("Product not found");
+    }
+
+    res.json(resource);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error fetching product");
+  }
 });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
